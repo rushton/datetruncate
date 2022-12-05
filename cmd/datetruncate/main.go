@@ -2,12 +2,10 @@ package main
 
 import (
 	"bufio"
-	"fmt"
 	"io"
 	"log"
 	"os"
 	"regexp"
-	"strings"
 	"time"
 )
 
@@ -53,27 +51,29 @@ func main() {
 		lines = bufio.NewReader(os.Stdin)
 	}
 
+	buffer := bufio.NewWriterSize(os.Stdout, 16*1024)
 	for {
-		line, err := lines.ReadString('\n')
+		line, err := lines.ReadBytes('\n')
 		if err == io.EOF {
 			break
 		} else if err != nil {
 			log.Fatalf("Failed to read line: %v\n", err)
 		}
-		matches := RFC3339Regex.FindAllStringIndex(line, -1)
+		matches := RFC3339Regex.FindAllIndex(line, -1)
 		offset := 0
 		for _, indexes := range matches {
 			start, end := indexes[0], indexes[1]
-			dt, err := time.Parse(time.RFC3339, string(line[start+offset:end+offset]))
+			dt, err := time.Parse(time.RFC3339, string(line[start:end]))
 			if err != nil {
 				log.Fatalf("Failed to parse date: %v\n", err)
 			}
-			tDate := truncateDate(dt, granularity).Format(time.RFC3339)
-			line = strings.Replace(line, line[start+offset:end+offset], tDate, 1)
-			offset = offset + (len(tDate) - (end - start))
+			buffer.Write(line[offset:start])
+			buffer.WriteString(truncateDate(dt, granularity).Format(time.RFC3339))
+			offset = end
 		}
-		fmt.Print(string(line))
+		buffer.WriteByte('\n')
 	}
+	buffer.Flush()
 }
 
 func truncateDate(dt time.Time, granularity truncateGranularity) time.Time {
